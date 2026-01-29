@@ -5,9 +5,12 @@ import time
 
 plt.switch_backend('agg')
 
+# ---------------------- GPU DEVICE SETUP ----------------------
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# --------------------------------------------------------------
+
 
 def adjust_learning_rate(optimizer, scheduler, epoch, args, printout=True):
-    # lr = args.learning_rate * (0.2 ** (epoch // 2))
     if args.lradj == 'type1':
         lr_adjust = {epoch: args.learning_rate * (0.5 ** ((epoch - 1) // 1))}
     elif args.lradj == 'type2':
@@ -99,18 +102,28 @@ def visual(true, preds=None, name='./pic/test.pdf'):
     plt.legend()
     plt.savefig(name, bbox_inches='tight')
 
-def test_params_flop(model,x_shape):
+
+def test_params_flop(model, x_shape):
     """
-    If you want to thest former's flop, you need to give default value to inputs in model.forward(), the following code can only pass one argument to forward()
+    FLOPs + Params calculation (GPU supported)
     """
     model_params = 0
     for parameter in model.parameters():
         model_params += parameter.numel()
-        print('INFO: Trainable parameter count: {:.2f}M'.format(model_params / 1000000.0))
+    print('INFO: Trainable parameter count: {:.2f}M'.format(model_params / 1000000.0))
+
     from ptflops import get_model_complexity_info    
-    with torch.cuda.device(0):
-        macs, params = get_model_complexity_info(model.cuda(), x_shape, as_strings=True, print_per_layer_stat=True)
-        # print('Flops:' + flops)
-        # print('Params:' + params)
-        print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
-        print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+    if torch.cuda.is_available():
+        model = model.to(device)
+        with torch.cuda.device(0):
+            macs, params = get_model_complexity_info(
+                model, x_shape, as_strings=True, print_per_layer_stat=True
+            )
+    else:
+        macs, params = get_model_complexity_info(
+            model, x_shape, as_strings=True, print_per_layer_stat=True
+        )
+
+    print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+    print('{:<30}  {:<8}'.format('Number of parameters: ', params))
